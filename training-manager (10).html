@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>トレーニング管理</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+body{margin:0;padding:0;overscroll-behavior:none}
+.bounce{animation:b 1s infinite}
+.pulse{animation:p 2s cubic-bezier(.4,0,.6,1) infinite}
+@keyframes b{0%,100%{transform:translateY(-25%);animation-timing-function:cubic-bezier(.8,0,1,1)}50%{transform:translateY(0);animation-timing-function:cubic-bezier(0,0,.2,1)}}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.5}}
+.grad-all{background:linear-gradient(135deg,#fb7185 0%,#34d399 50%,#fbbf24 100%);animation:shimmer 3s ease-in-out infinite}
+.grad-up-low{background:linear-gradient(135deg,#fda4af 0%,#6ee7b7 100%)}
+.grad-up-core{background:linear-gradient(135deg,#fda4af 0%,#fcd34d 100%)}
+.grad-low-core{background:linear-gradient(135deg,#6ee7b7 0%,#fcd34d 100%)}
+@keyframes shimmer{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+.grad-all{background-size:200% 200%}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const defaultCats=[
+  {id:'mon',name:'月曜日',days:[1],color:'rose'},
+  {id:'tue',name:'火曜日',days:[2],color:'orange'},
+  {id:'wed',name:'水曜日',days:[3],color:'amber'},
+  {id:'thu',name:'木曜日',days:[4],color:'emerald'},
+  {id:'fri',name:'金曜日',days:[5],color:'blue'},
+  {id:'sat',name:'土曜日',days:[6],color:'purple'}
+];
+const days=['月','火','水','木','金','土','日'];
+
+let cats=JSON.parse(JSON.stringify(defaultCats));
+
+const defaultSubs = {
+  mon:[
+    {name:'トレーニング1',emoji:'💪',img:'',desc:'',sets:''},
+    {name:'トレーニング2',emoji:'🏋️',img:'',desc:'',sets:''},
+    {name:'トレーニング3',emoji:'🤸',img:'',desc:'',sets:''},
+    {name:'トレーニング4',emoji:'💪',img:'',desc:'',sets:''}
+  ],
+  tue:[
+    {name:'トレーニング1',emoji:'💪',img:'',desc:'',sets:''},
+    {name:'トレーニング2',emoji:'🏋️',img:'',desc:'',sets:''},
+    {name:'トレーニング3',emoji:'🤸',img:'',desc:'',sets:''},
+    {name:'トレーニング4',emoji:'💪',img:'',desc:'',sets:''}
+  ],
+  wed:[
+    {name:'トレーニング1',emoji:'💪',img:'',desc:'',sets:''},
+    {name:'トレーニング2',emoji:'🏋️',img:'',desc:'',sets:''},
+    {name:'トレーニング3',emoji:'🤸',img:'',desc:'',sets:''},
+    {name:'トレーニング4',emoji:'💪',img:'',desc:'',sets:''}
+  ],
+  thu:[
+    {name:'トレーニング1',emoji:'💪',img:'',desc:'',sets:''},
+    {name:'トレーニング2',emoji:'🏋️',img:'',desc:'',sets:''},
+    {name:'トレーニング3',emoji:'🤸',img:'',desc:'',sets:''},
+    {name:'トレーニング4',emoji:'💪',img:'',desc:'',sets:''}
+  ],
+  fri:[
+    {name:'トレーニング1',emoji:'💪',img:'',desc:'',sets:''},
+    {name:'トレーニング2',emoji:'🏋️',img:'',desc:'',sets:''},
+    {name:'トレーニング3',emoji:'🤸',img:'',desc:'',sets:''},
+    {name:'トレーニング4',emoji:'💪',img:'',desc:'',sets:''}
+  ],
+  sat:[
+    {name:'トレーニング1',emoji:'💪',img:'',desc:'',sets:''},
+    {name:'トレーニング2',emoji:'🏋️',img:'',desc:'',sets:''},
+    {name:'トレーニング3',emoji:'🤸',img:'',desc:'',sets:''},
+    {name:'トレーニング4',emoji:'💪',img:'',desc:'',sets:''}
+  ]
+};
+
+let st={
+  view:'weekly',
+  subs:JSON.parse(JSON.stringify(defaultSubs)),
+  prog:{mon:{c:false,s:[0,0,0,0]},tue:{c:false,s:[0,0,0,0]},wed:{c:false,s:[0,0,0,0]},thu:{c:false,s:[0,0,0,0]},fri:{c:false,s:[0,0,0,0]},sat:{c:false,s:[0,0,0,0]}},
+  exp:{mon:1,tue:1,wed:1,thu:1,fri:1,sat:1},
+  hist:{},
+  streak:0,
+  celeb:0,
+  week:'',
+  ed:null,
+  ei:null,
+  calMon:new Date().getMonth(),
+  calYear:new Date().getFullYear(),
+  showUrlModal:false,
+  generatedUrl:'',
+  isSharedConfig:false,
+  editingCat:null,
+  title:'トレーニング管理',
+  subtitle:'週間目標達成を目指しましょう',
+  editingTitle:false
+};
+
+function getWk(d=new Date()){
+  const t=new Date(d),day=t.getDay(),diff=t.getDate()-day+(day===0?-6:1);
+  t.setDate(diff);t.setHours(0,0,0,0);
+  return t.toISOString().split('T')[0];
+}
+
+function wk(d){return'w_'+getWk(d)}
+
+function msg(w){
+  if(w>=100&&w%100===0)return'100週連続達成!驚異的な継続力!習慣を積み重ねてきたあなたは本当に素晴らしいです!';
+  const m={
+    10:'10週連続達成!素晴らしい継続力です!習慣化への第一歩ですね',
+    20:'20週連続達成!もう立派な習慣になっています!変化を感じていませんか?',
+    30:'30週連続達成!半年以上の継続、本当に素晴らしいです!',
+    40:'40週連続達成!あなたの努力が輝いています!周りも気づいているはず',
+    50:'50週連続達成!1年近く続けられるなんて驚異的!自信を持ってください',
+    60:'60週連続達成!もう生活の一部ですね!この調子で続けましょう',
+    70:'70週連続達成!並外れた継続力!あなたは本当に強い方です',
+    80:'80週連続達成!もうすぐ2年!素晴らしい習慣が身についています',
+    90:'90週連続達成!100週まであと少し!ここまで来たあなたは最高です'
+  };
+  return m[w]||w+'週連続達成!素晴らしい継続力です!';
+}
+
+function snd(t){
+  try{
+    const a=new(window.AudioContext||window.webkitAudioContext)(),n=a.currentTime;
+    if(t==='h'){
+      const f=[523,659,784,1047,784,659,523,659,784,1047,1175,1319,1568],d=[.15,.15,.15,.3,.15,.15,.15,.15,.15,.3,.3,.3,.6];
+      let c=n;
+      f.forEach((q,i)=>{const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=q;g.gain.setValueAtTime(.3,c);g.gain.exponentialRampToValueAtTime(.01,c+d[i]);o.start(c);o.stop(c+d[i]);c+=d[i]});
+    }else if(t==='t'){
+      const f=[523,659,784,1047,1175],d=[.2,.2,.2,.3,.4];
+      let c=n;
+      f.forEach((q,i)=>{const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=q;o.type='triangle';g.gain.setValueAtTime(.2,c);g.gain.exponentialRampToValueAtTime(.01,c+d[i]);o.start(c);o.stop(c+d[i]);c+=d[i]});
+    }else{
+      [523,659,784].forEach((q,i)=>{const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=q;const s=n+(i*.1);g.gain.setValueAtTime(.15,s);g.gain.exponentialRampToValueAtTime(.01,s+.3);o.start(s);o.stop(s+.3)});
+    }
+  }catch(e){}
+}
+
+function score(p){
+  let totalItems=0;
+  let completedItems=0;
+  cats.forEach(c=>{
+    const itemCount=st.subs[c.id]?.length||0;
+    totalItems+=itemCount;
+    if(p[c.id]?.c){
+      completedItems+=itemCount;
+    }else{
+      completedItems+=(p[c.id]?.s||[]).filter(Boolean).length;
+    }
+  });
+  return totalItems===0?0:Math.round((completedItems/totalItems)*100);
+}
+
+function streak(h,cw,cs=0){
+  let cnt=cs===100?1:0,d=new Date(cw);
+  while(1){
+    d.setDate(d.getDate()-7);
+    const k=wk(d);
+    if(h[k]&&h[k].sc===100)cnt++;else break;
+  }
+  st.streak=cnt;
+}
+
+function save(p){
+  const k=wk(new Date());
+  localStorage.setItem(k,JSON.stringify(p));
+  const sc=score(p),h={...st.hist};
+  h[k]={sc,c:sc===100,dt:st.week};
+  localStorage.setItem('th',JSON.stringify(h));
+  st.hist=h;
+  streak(h,st.week,sc);
+  if(sc===100&&!st.celeb){
+    const n=st.streak;
+    let tp='n';
+    if(n%100===0){st.celeb='h';tp='h'}
+    else if(n%10===0){st.celeb='t';tp='t'}
+    else st.celeb='n';
+    snd(tp);
+    setTimeout(()=>{st.celeb=0;render()},5000);
+  }
+  render();
+}
+
+function loadFromUrl(){
+  try{
+    const hash=window.location.hash.substring(1);
+    if(hash){
+      const decoded=decodeURIComponent(escape(atob(hash)));
+      const config=JSON.parse(decoded);
+      if(config.subs){
+        st.subs=config.subs;
+        st.isSharedConfig=true;
+        // 共有設定の場合、初回のみlocalStorageに保存
+        const savedConfig=localStorage.getItem('sc');
+        if(!savedConfig){
+          localStorage.setItem('sc',JSON.stringify(config.subs));
+        }
+      }
+      if(config.cats){
+        cats=config.cats;
+        st.isSharedConfig=true;
+        const savedCats=localStorage.getItem('cats');
+        if(!savedCats){
+          localStorage.setItem('cats',JSON.stringify(config.cats));
+        }
+      }
+      if(config.title){
+        st.title=config.title;
+        st.subtitle=config.subtitle||'週間目標達成を目指しましょう';
+        st.isSharedConfig=true;
+        const savedTitle=localStorage.getItem('title');
+        if(!savedTitle){
+          localStorage.setItem('title',st.title);
+          localStorage.setItem('subtitle',st.subtitle);
+        }
+      }
+    }
+  }catch(e){
+    console.error('URL読み込みエラー:',e);
+  }
+}
+
+function editCat(id){
+  st.editingCat=id;
+  render();
+}
+
+function saveCat(id,name,day1,day2){
+  const idx=cats.findIndex(c=>c.id===id);
+  if(idx!==-1){
+    cats[idx].name=name;
+    cats[idx].days=[parseInt(day1)];
+    localStorage.setItem('cats',JSON.stringify(cats));
+  }
+  st.editingCat=null;
+  render();
+}
+
+function editTitle(){
+  st.editingTitle=true;
+  render();
+}
+
+function saveTitle(title,subtitle){
+  st.title=title;
+  st.subtitle=subtitle;
+  localStorage.setItem('title',title);
+  localStorage.setItem('subtitle',subtitle);
+  st.editingTitle=false;
+  render();
+}
+
+function addCategory(){
+  const newId='cat_'+Date.now();
+  const colors=['rose','orange','amber','emerald','blue','purple','pink','indigo'];
+  const randomColor=colors[cats.length%colors.length];
+  cats.push({id:newId,name:'新しいカテゴリー',days:[1],color:randomColor});
+  st.subs[newId]=[
+    {name:'項目1',emoji:'💪',img:'',desc:'',sets:''},
+    {name:'項目2',emoji:'💪',img:'',desc:'',sets:''}
+  ];
+  st.prog[newId]={c:false,s:[0,0]};
+  st.exp[newId]=1;
+  localStorage.setItem('cats',JSON.stringify(cats));
+  localStorage.setItem('sc',JSON.stringify(st.subs));
+  render();
+}
+
+function deleteCategory(id){
+  if(!confirm('このカテゴリーを削除しますか？'))return;
+  const idx=cats.findIndex(c=>c.id===id);
+  if(idx!==-1){
+    cats.splice(idx,1);
+    delete st.subs[id];
+    delete st.prog[id];
+    delete st.exp[id];
+    localStorage.setItem('cats',JSON.stringify(cats));
+    localStorage.setItem('sc',JSON.stringify(st.subs));
+    render();
+  }
+}
+
+function addSubItem(catId){
+  if(!st.subs[catId])st.subs[catId]=[];
+  st.subs[catId].push({name:'新しい項目',emoji:'💪',img:'',desc:'',sets:''});
+  if(!st.prog[catId])st.prog[catId]={c:false,s:[]};
+  st.prog[catId].s.push(0);
+  localStorage.setItem('sc',JSON.stringify(st.subs));
+  render();
+}
+
+function deleteSubItem(catId,idx){
+  if(!confirm('この項目を削除しますか？'))return;
+  st.subs[catId].splice(idx,1);
+  st.prog[catId].s.splice(idx,1);
+  localStorage.setItem('sc',JSON.stringify(st.subs));
+  render();
+}
+
+function load(){
+  const ws=getWk();st.week=ws;
+  const k=wk(new Date()),lw=localStorage.getItem('lw');
+  if(lw&&lw!==ws){
+    st.prog={mon:{c:false,s:[0,0,0,0]},tue:{c:false,s:[0,0,0,0]},wed:{c:false,s:[0,0,0,0]},thu:{c:false,s:[0,0,0,0]},fri:{c:false,s:[0,0,0,0]},sat:{c:false,s:[0,0,0,0]}};
+    localStorage.setItem(k,JSON.stringify(st.prog));
+  }
+  localStorage.setItem('lw',ws);
+  
+  // URL設定を最初に読み込む
+  loadFromUrl();
+  
+  // localStorageからタイトル設定を読み込む
+  const savedTitle=localStorage.getItem('title');
+  const savedSubtitle=localStorage.getItem('subtitle');
+  if(savedTitle && !st.isSharedConfig){
+    st.title=savedTitle;
+    st.subtitle=savedSubtitle||'週間目標達成を目指しましょう';
+  }
+  
+  // localStorageからカテゴリ設定を読み込む（URL設定がない場合のみ上書き）
+  const savedCats=localStorage.getItem('cats');
+  if(savedCats && !st.isSharedConfig){
+    cats=JSON.parse(savedCats);
+  }
+  
+  // localStorageから設定を読み込む（URL設定がない場合のみ上書き）
+  const ss=localStorage.getItem('sc');
+  if(ss && !st.isSharedConfig){
+    st.subs=JSON.parse(ss);
+  }
+  
+  const sp=localStorage.getItem(k);
+  if(sp)st.prog=JSON.parse(sp);
+  const sh=localStorage.getItem('th');
+  if(sh){st.hist=JSON.parse(sh);streak(st.hist,ws,sp?score(JSON.parse(sp)):0)}
+}
+
+function tMain(i){
+  const c=!st.prog[i].c;
+  st.prog[i]={c,s:c?[1,1,1,1]:[0,0,0,0]};
+  save(st.prog);
+}
+
+function tSub(i,j){
+  st.prog[i].s[j]=!st.prog[i].s[j];
+  if(st.prog[i].c)st.prog[i].c=false;
+  save(st.prog);
+}
+
+function edit(i,j){st.ed=i;st.ei=j;render()}
+
+function saveE(i,j,n,e,u,s,d){
+  st.subs[i][j]={name:n,emoji:e,img:u,sets:s,desc:d};
+  localStorage.setItem('sc',JSON.stringify(st.subs));
+  st.ed=null;st.ei=null;render();
+}
+
+function generateShareUrl(){
+  const config={subs:st.subs,cats:cats,title:st.title,subtitle:st.subtitle};
+  const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(config))));
+  const url=window.location.origin+window.location.pathname+'#'+encoded;
+  st.generatedUrl=url;
+  st.showUrlModal=true;
+  render();
+}
+
+function copyUrl(){
+  const textarea=document.getElementById('urlTextarea');
+  textarea.select();
+  textarea.setSelectionRange(0,99999);
+  navigator.clipboard.writeText(st.generatedUrl).then(()=>{
+    alert('URLをコピーしました！このURLを共有してください。');
+  }).catch(()=>{
+    alert('コピーに失敗しました。手動でURLを選択してコピーしてください。');
+  });
+}
+
+function closeModal(){
+  st.showUrlModal=false;
+  render();
+}
+
+function getDays(y,m){
+  const fd=new Date(y,m,1),ld=new Date(y,m+1,0),sd=fd.getDay(),ed=ld.getDate(),arr=[];
+  for(let i=0;i<(sd===0?6:sd-1);i++)arr.push(null);
+  for(let i=1;i<=ed;i++)arr.push(i);
+  return arr;
+}
+
+function getDayStatus(y,m,d){
+  const dt=new Date(y,m,d),ws=getWk(dt),k=wk(dt);
+  const p=localStorage.getItem(k);
+  if(!p)return{score:0};
+  const pr=JSON.parse(p);
+  const sc=score(pr);
+  const dw=dt.getDay()||7;
+  const status={score:sc};
+  cats.forEach(c=>{
+    if(c.days.includes(dw)){
+      if(pr[c.id]?.c)status[c.id]=true;
+      else if(pr[c.id]?.s?.some(Boolean))status[c.id]='partial';
+    }
+  });
+  return status;
+}
+
+function render(){
+  const sc=score(st.prog),cd=getDays(st.calYear,st.calMon);
+  document.getElementById('root').innerHTML=`
+    <div class="min-h-screen p-4 md:p-8">
+      <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-8">
+          ${st.editingTitle?`
+            <div class="max-w-2xl mx-auto space-y-3">
+              <input type="text" value="${st.title}" placeholder="タイトル" class="w-full bg-white text-stone-800 px-4 py-2 rounded-lg border border-stone-200 text-3xl font-bold text-center" id="titleInput">
+              <input type="text" value="${st.subtitle}" placeholder="サブタイトル" class="w-full bg-white text-stone-600 px-4 py-2 rounded-lg border border-stone-200 text-center" id="subtitleInput">
+              <button onclick="saveTitle(document.getElementById('titleInput').value,document.getElementById('subtitleInput').value)" class="bg-rose-400 hover:bg-rose-500 text-white px-6 py-2 rounded-lg font-medium">保存</button>
+            </div>
+          `:`
+            <div class="inline-flex items-center gap-3">
+              <h1 class="text-4xl font-bold mb-2 bg-gradient-to-r from-rose-600 to-amber-600 bg-clip-text text-transparent">${st.title}</h1>
+              <button onclick="editTitle()" class="text-stone-400 hover:text-stone-600 mb-2">✏️</button>
+            </div>
+            <p class="text-stone-600">${st.subtitle}</p>
+          `}
+          ${st.isSharedConfig?'<p class="text-xs text-green-600 mt-1">✓ カスタム設定が適用されています</p>':''}
+        </div>
+        
+        
+        <div class="mb-4 text-center">
+          <button onclick="generateShareUrl()" class="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6 py-3 rounded-xl shadow-lg transition-all font-bold">
+            📤 個人用URLを生成
+          </button>
+        </div>
+        
+        
+        <div class="flex gap-2 mb-6 bg-white/80 backdrop-blur p-1 rounded-xl shadow-sm">
+          <button onclick="st.view='weekly';render()" class="flex-1 py-3 px-4 rounded-lg transition-all font-medium ${st.view==='weekly'?'bg-rose-400 text-white shadow-md':'text-stone-600'}">今週</button>
+          <button onclick="st.view='calendar';render()" class="flex-1 py-3 px-4 rounded-lg transition-all font-medium ${st.view==='calendar'?'bg-rose-400 text-white shadow-md':'text-stone-600'}">カレンダー</button>
+          <button onclick="st.view='history';render()" class="flex-1 py-3 px-4 rounded-lg transition-all font-medium ${st.view==='history'?'bg-rose-400 text-white shadow-md':'text-stone-600'}">履歴</button>
+        </div>
+        
+        ${st.view==='weekly'?`
+          <div class="bg-white/80 backdrop-blur rounded-2xl p-8 mb-6 shadow-lg">
+            <div class="text-center">
+              <div class="text-6xl font-bold mb-3 text-stone-800">${sc}<span class="text-3xl text-stone-500">%</span></div>
+              <div class="w-full bg-stone-200 rounded-full h-3 mb-4">
+                <div class="bg-gradient-to-r from-rose-400 to-amber-400 h-3 rounded-full transition-all duration-500" style="width:${sc}%"></div>
+              </div>
+              ${sc===100?'<div class="text-amber-600 pulse font-bold text-lg">🏆 素晴らしいです! 🏆</div>':''}
+              ${st.streak>0?`<div class="mt-3 text-lg font-semibold text-rose-600">✨ ${st.streak}週連続達成中!</div>`:''}
+            </div>
+          </div>
+          ${st.celeb?celeb():''}
+          ${cats.map(c=>`
+            <div class="bg-white/80 backdrop-blur rounded-2xl p-5 mb-4 shadow-md">
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-4 flex-1">
+                  <button onclick="tMain('${c.id}')" class="w-9 h-9 rounded-xl border-2 flex items-center justify-center transition-all flex-shrink-0 ${st.prog[c.id]?.c?`bg-${c.color}-400 border-transparent shadow-md text-white`:'border-stone-300 bg-white'}">
+                    ${st.prog[c.id]?.c?'✓':''}
+                  </button>
+                  <div class="flex-1">
+                    ${st.editingCat===c.id?`
+                      <div class="flex gap-2 items-center">
+                        <input type="text" value="${c.name}" placeholder="カテゴリ名" class="bg-white text-stone-800 px-3 py-1 rounded-lg border border-stone-200 text-lg font-bold" id="catName_${c.id}">
+                        <select class="bg-white text-stone-800 px-2 py-1 rounded-lg border border-stone-200 text-sm" id="catDay1_${c.id}">
+                          ${days.map((d,i)=>`<option value="${i+1}" ${c.days[0]===i+1?'selected':''}>${d}</option>`).join('')}
+                        </select>
+                        <button onclick="saveCat('${c.id}',document.getElementById('catName_${c.id}').value,document.getElementById('catDay1_${c.id}').value,document.getElementById('catDay1_${c.id}').value)" class="bg-rose-400 hover:bg-rose-500 text-white px-3 py-1 rounded-lg text-sm font-medium">保存</button>
+                      </div>
+                    `:`
+                      <h3 class="text-xl font-bold text-stone-800">${c.name}</h3>
+                      <p class="text-sm text-stone-500">${days[c.days[0]-1]}</p>
+                    `}
+                  </div>
+                  ${st.editingCat!==c.id?`
+                    <button onclick="editCat('${c.id}')" class="text-stone-400 hover:text-stone-600 p-1 mr-2">✏️</button>
+                    ${cats.length>1?`<button onclick="deleteCategory('${c.id}')" class="text-red-400 hover:text-red-600 p-1 mr-2">🗑️</button>`:''}
+                  `:''}
+                </div>
+                <button onclick="st.exp['${c.id}']=!st.exp['${c.id}'];render()" class="ml-2 text-stone-400">
+                  ${st.exp[c.id]?'▲':'▼'}
+                </button>
+              </div>
+              ${st.exp[c.id]?`
+                <div class="mt-4 space-y-3 pl-13">
+                  ${st.subs[c.id].map((s,i)=>`
+                    <div class="bg-stone-50/80 rounded-xl p-4 border border-stone-200">
+                      <div class="flex items-start gap-3">
+                        <button onclick="tSub('${c.id}',${i})" class="w-6 h-6 mt-1 rounded-lg border-2 flex items-center justify-center transition-all flex-shrink-0 ${st.prog[c.id]?.s[i]?'bg-stone-400 border-transparent text-white':'border-stone-300 bg-white'}">
+                          ${st.prog[c.id]?.s[i]?'✓':''}
+                        </button>
+                        <div class="w-16 h-16 flex-shrink-0 bg-gradient-to-br from-rose-100 to-amber-100 rounded-xl flex items-center justify-center text-4xl">${s.emoji||'💪'}</div>
+                        ${st.ed===c.id&&st.ei===i?`
+                          <div class="flex-1 space-y-3">
+                            <input type="text" value="${s.name}" placeholder="名前" class="w-full bg-white text-stone-800 px-3 py-2 rounded-lg border border-stone-200" id="n${i}">
+                            <input type="text" value="${s.emoji}" placeholder="絵文字" class="w-full bg-white text-stone-800 px-3 py-2 rounded-lg border border-stone-200 text-sm" id="e${i}">
+                            <input type="text" value="${s.img}" placeholder="画像URL" class="w-full bg-white text-stone-800 px-3 py-2 rounded-lg border border-stone-200 text-sm" id="u${i}">
+                            <input type="text" value="${s.sets}" placeholder="セット数" class="w-full bg-white text-stone-800 px-3 py-2 rounded-lg border border-stone-200 text-sm" id="s${i}">
+                            <textarea placeholder="詳細" class="w-full bg-white text-stone-800 px-3 py-2 rounded-lg border border-stone-200 text-sm resize-none" rows="3" id="d${i}">${s.desc}</textarea>
+                            <button onclick="saveE('${c.id}',${i},document.getElementById('n${i}').value,document.getElementById('e${i}').value,document.getElementById('u${i}').value,document.getElementById('s${i}').value,document.getElementById('d${i}').value)" class="w-full bg-rose-400 hover:bg-rose-500 text-white px-4 py-2 rounded-lg transition-colors font-medium shadow-sm">保存</button>
+                          </div>
+                        `:`
+                          <div class="flex-1 min-w-0">
+                            <div class="text-base font-semibold mb-1 text-stone-800">${s.name}</div>
+                            ${s.sets?`<div class="text-sm text-rose-600 font-medium mb-2">📝 ${s.sets}</div>`:''}
+                            ${s.desc?`<div class="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed mb-2">${s.desc}</div>`:''}
+                            ${s.img?`<a href="${s.img}" target="_blank" class="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">🔗 参考画像</a>`:''}
+                            ${!s.desc&&!s.sets&&!s.img?'<div class="text-sm text-stone-400 italic">詳細未設定</div>':''}
+                          </div>
+                          <button onclick="edit('${c.id}',${i})" class="text-stone-400 hover:text-stone-600 p-1">✏️</button>
+                          ${st.subs[c.id].length>1?`<button onclick="deleteSubItem('${c.id}',${i})" class="text-red-400 hover:text-red-600 p-1">🗑️</button>`:''}
+                        `}
+                      </div>
+                    </div>
+                  `).join('')}
+                  <button onclick="addSubItem('${c.id}')" class="w-full bg-green-100 hover:bg-green-200 text-green-700 px-4 py-3 rounded-xl transition-colors font-medium border-2 border-dashed border-green-300">
+                    ➕ 項目を追加
+                  </button>
+                </div>
+              `:''}
+            </div>
+          `).join('')}
+          
+          <div class="text-center mt-6">
+            <button onclick="addCategory()" class="bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white px-6 py-3 rounded-xl shadow-lg transition-all font-bold">
+              ➕ カテゴリーを追加
+            </button>
+          </div>
+        `:st.view==='calendar'?`
+          <div class="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-lg">
+            <div class="flex items-center justify-between mb-6">
+              <button onclick="st.calMon--;if(st.calMon<0){st.calMon=11;st.calYear--}render()" class="text-stone-600 hover:text-stone-800 px-3 py-1">◀</button>
+              <h2 class="text-2xl font-bold text-stone-800">${st.calYear}年${st.calMon+1}月</h2>
+              <button onclick="st.calMon++;if(st.calMon>11){st.calMon=0;st.calYear++}render()" class="text-stone-600 hover:text-stone-800 px-3 py-1">▶</button>
+            </div>
+            <div class="grid grid-cols-7 gap-2">
+              ${['月','火','水','木','金','土','日'].map(d=>`<div class="text-center text-sm font-semibold text-stone-600 py-2">${d}</div>`).join('')}
+              ${cd.map(d=>{
+                if(!d)return'<div></div>';
+                const ds=getDayStatus(st.calYear,st.calMon,d);
+                const perfectScore=ds.score===100;
+                let cls='bg-stone-100 text-stone-700';
+                
+                if(perfectScore){
+                  cls='grad-all text-white font-bold shadow-md';
+                }else if(ds.score>0){
+                  cls='bg-gradient-to-br from-rose-200 to-purple-200 text-stone-800';
+                }
+                return`<div class="aspect-square flex items-center justify-center rounded-lg ${cls} text-sm transition-all">${d}</div>`;
+              }).join('')}
+            </div>
+            <div class="mt-6 text-sm text-stone-600 space-y-1">
+              <div class="flex items-center gap-2"><div class="w-4 h-4 rounded bg-gradient-to-r from-rose-400 to-purple-400"></div>一部完了</div>
+              <div class="flex items-center gap-2"><div class="w-4 h-4 rounded grad-all"></div>全て完了(100点)🏆</div>
+            </div>
+          </div>
+        `:`
+          <div class="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-lg">
+            <h2 class="text-2xl font-bold mb-6 text-stone-800">達成履歴</h2>
+            <div class="space-y-3">
+              ${Object.entries(st.hist).sort((a,b)=>b[1].dt.localeCompare(a[1].dt)).slice(0,12).map(([k,d])=>`
+                <div class="flex items-center justify-between bg-stone-50 rounded-xl p-5 border border-stone-200">
+                  <div class="flex items-center gap-4">
+                    ${d.c?'🏆':''}
+                    <div>
+                      <div class="font-semibold text-stone-800">${d.dt} の週</div>
+                      <div class="text-sm text-stone-500">${new Date(d.dt).toLocaleDateString('ja-JP',{month:'long',day:'numeric'})}〜</div>
+                    </div>
+                  </div>
+                  <div class="text-2xl font-bold text-stone-800">${d.sc}<span class="text-sm text-stone-500">%</span></div>
+                </div>
+              `).join('')}
+              ${Object.keys(st.hist).length===0?'<div class="text-center text-stone-400 py-12">まだ履歴がありません</div>':''}
+            </div>
+          </div>
+        `}
+      </div>
+    </div>
+    
+    ${st.showUrlModal?`
+      <div class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" onclick="closeModal()">
+        <div class="bg-white rounded-2xl p-8 max-w-2xl w-full shadow-2xl" onclick="event.stopPropagation()">
+          <h2 class="text-2xl font-bold mb-4 text-stone-800">個人用URLを生成しました</h2>
+          <p class="text-stone-600 mb-4">このURLを共有してください。URLを開くと、現在の設定が自動的に反映されます。</p>
+          <div class="bg-blue-50 p-4 rounded-lg mb-4 border-2 border-blue-300">
+            <textarea readonly class="w-full text-sm text-stone-800 break-all font-mono bg-transparent border-none outline-none resize-none" rows="4" id="urlTextarea">${st.generatedUrl}</textarea>
+          </div>
+          <div class="flex gap-3">
+            <button onclick="copyUrl()" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-bold transition-colors">
+              📋 URLをコピー
+            </button>
+            <button onclick="closeModal()" class="flex-1 bg-stone-200 hover:bg-stone-300 text-stone-800 px-6 py-3 rounded-lg font-bold transition-colors">
+              閉じる
+            </button>
+          </div>
+        </div>
+      </div>
+    `:''}
+  `;
+}
+
+function celeb(){
+  if(st.celeb==='h'){
+    return`<div class="fixed inset-0 z-50 pointer-events-none overflow-hidden">
+      <div class="absolute inset-0 bg-gradient-to-br from-red-200 via-yellow-200 via-green-200 via-blue-200 to-purple-200 opacity-30 pulse"></div>
+      <div class="absolute inset-0 flex flex-col items-center justify-center">
+        <div class="text-9xl mb-6 bounce">🏆</div>
+        <div class="bg-white/95 backdrop-blur rounded-3xl p-8 shadow-2xl max-w-2xl mx-4 text-center border-4 border-amber-400">
+          <div class="text-3xl font-bold text-amber-600 mb-4">${st.streak}週連続達成!</div>
+          <div class="text-xl text-stone-700 leading-relaxed">${msg(st.streak)}</div>
+          <div class="mt-6 flex justify-center gap-3 text-5xl">💐🌟💖</div>
+        </div>
+      </div>
+    </div>`;
+  }else if(st.celeb==='t'){
+    return`<div class="fixed inset-0 z-50 pointer-events-none overflow-hidden">
+      <div class="absolute inset-0 flex flex-col items-center justify-center">
+        <div class="text-8xl mb-6 bounce">🥈</div>
+        <div class="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl max-w-xl mx-4 text-center border-2 border-stone-300">
+          <div class="text-2xl font-bold text-stone-700 mb-3">${st.streak}週連続達成!</div>
+          <div class="text-lg text-stone-600">${msg(st.streak)}</div>
+          <div class="mt-4 flex justify-center gap-2 text-3xl">🌟💫✨</div>
+        </div>
+      </div>
+    </div>`;
+  }else{
+    return`<div class="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
+      <div class="text-8xl bounce">🎊</div>
+    </div>`;
+  }
+}
+
+load();
+render();
+</script>
+</body>
+</html>
